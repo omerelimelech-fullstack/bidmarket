@@ -1,3 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-['Heebo'] bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+/* Custom Utilities for Glass/Floating feel if needed, but Tailwind classes suffice */
+.glass-panel {
+    @apply bg-white rounded-xl shadow-md border border-gray-100;
+}

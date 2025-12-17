@@ -7,14 +7,14 @@ import { supabase } from '../supabaseClient';
 const Wizard = () => {
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [scopeApproved, setScopeApproved] = useState(false);
+    const [selectedPackage, setSelectedPackage] = useState(null); // Changed from scopeApproved
     const [budget, setBudget] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleNext = () => {
         if (currentStep === 1 && selectedProduct) {
             setCurrentStep(2);
-        } else if (currentStep === 2 && scopeApproved) {
+        } else if (currentStep === 2 && selectedPackage) { // Check package selection
             setCurrentStep(3);
         }
     };
@@ -32,12 +32,16 @@ const Wizard = () => {
                 throw new Error('Supabase client is not initialized. Check your .env file.');
             }
 
+            // Combine product and package for the service field
+            // e.g. "instagram_advanced"
+            const finalService = `${selectedProduct}_${selectedPackage}`;
+
             const { data, error } = await supabase
                 .from('bids')
                 .insert([
                     {
-                        service: selectedProduct,
-                        scope_approved: scopeApproved,
+                        service: finalService,
+                        scope_approved: true, // Legacy field, keeping expected boolean
                         budget: Number(budget),
                         status: 'open'
                     },
@@ -45,37 +49,58 @@ const Wizard = () => {
 
             if (error) throw error;
 
-            alert('Bid placed successfully!');
+            alert('ההצעה הוגשה בהצלחה!');
+            // Reset wizard
+            setCurrentStep(1);
+            setSelectedProduct(null);
+            setSelectedPackage(null);
+            setBudget('');
         } catch (error) {
             console.error('Error submitting bid:', error);
-            alert(error.message || 'Error placing bid. Please try again.');
+            alert(error.message || 'שגיאה בהגשת הצעה. אנא נסה שוב.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden">
-                {/* Header / Progress */}
-                <div className="bg-blue-600 p-6 text-white flex justify-between items-center">
+        <div className="w-full">
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden">
+                {/* Header / Progress - Making it cleaner */}
+                <div className="bg-white p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold">Client Wizard</h1>
-                        <p className="text-blue-100 text-sm">Step {currentStep} of 3</p>
+                        <h1 className="text-2xl font-bold text-slate-900">אשף יצירת פרויקט</h1>
+                        <p className="text-slate-500 text-sm mt-1">שלב {currentStep} מתוך 3: {
+                            currentStep === 1 ? 'בחירת שירות' :
+                                currentStep === 2 ? 'בחירת חבילה' :
+                                    'הצעת תקציב'
+                        }</p>
                     </div>
-                    <div className="flex gap-2">
+
+                    {/* Progress Steps UI */}
+                    <div className="flex items-center gap-2">
                         {[1, 2, 3].map((step) => (
-                            <div
-                                key={step}
-                                className={`w-3 h-3 rounded-full ${step <= currentStep ? 'bg-white' : 'bg-blue-400'
-                                    }`}
-                            />
+                            <div key={step} className="flex items-center">
+                                <div
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${step === currentStep
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                        : step < currentStep
+                                            ? 'bg-green-500 text-white'
+                                            : 'bg-slate-100 text-slate-400'
+                                        }`}
+                                >
+                                    {step < currentStep ? '✓' : step}
+                                </div>
+                                {step < 3 && (
+                                    <div className={`w-8 h-1 mx-1 rounded-full ${step < currentStep ? 'bg-green-500' : 'bg-slate-100'}`} />
+                                )}
+                            </div>
                         ))}
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="p-8">
+                <div className="p-8 md:p-10 min-h-[400px]">
                     {currentStep === 1 && (
                         <Step1ProductSelection
                             selectedProduct={selectedProduct}
@@ -85,8 +110,8 @@ const Wizard = () => {
                     {currentStep === 2 && (
                         <Step2ScopeDefinition
                             selectedProduct={selectedProduct}
-                            isApproved={scopeApproved}
-                            onToggleApprove={setScopeApproved}
+                            selectedPackage={selectedPackage}
+                            onSelectPackage={setSelectedPackage}
                         />
                     )}
                     {currentStep === 3 && (
@@ -98,16 +123,16 @@ const Wizard = () => {
                 </div>
 
                 {/* Footer / Navigation */}
-                <div className="p-6 bg-gray-50 border-t flex justify-between">
+                <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
                     <button
                         onClick={handleBack}
                         disabled={currentStep === 1}
-                        className={`px-6 py-2 rounded-lg font-medium transition-colors ${currentStep === 1
-                            ? 'text-gray-400 cursor-not-allowed'
-                            : 'text-gray-600 hover:bg-gray-200'
+                        className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentStep === 1
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm'
                             }`}
                     >
-                        Back
+                        חזור
                     </button>
 
                     {currentStep < 3 ? (
@@ -115,26 +140,26 @@ const Wizard = () => {
                             onClick={handleNext}
                             disabled={
                                 (currentStep === 1 && !selectedProduct) ||
-                                (currentStep === 2 && !scopeApproved)
+                                (currentStep === 2 && !selectedPackage)
                             }
-                            className={`px-6 py-2 rounded-lg font-medium text-white transition-colors ${(currentStep === 1 && !selectedProduct) ||
-                                (currentStep === 2 && !scopeApproved)
-                                ? 'bg-blue-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/30'
+                            className={`px-8 py-3 rounded-lg font-bold text-white transition-all transform hover:-translate-y-0.5 ${(currentStep === 1 && !selectedProduct) ||
+                                (currentStep === 2 && !selectedPackage)
+                                ? 'bg-slate-300 cursor-not-allowed transform-none'
+                                : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200'
                                 }`}
                         >
-                            Next Step
+                            המשך לשלב הבא
                         </button>
                     ) : (
                         <button
-                            className={`px-6 py-2 rounded-lg font-medium text-white shadow-lg ${isSubmitting
-                                ? 'bg-green-400 cursor-not-allowed'
-                                : 'bg-green-600 hover:bg-green-700 shadow-green-600/30'
+                            className={`px-8 py-3 rounded-lg font-bold text-white shadow-lg transition-all transform hover:-translate-y-0.5 ${isSubmitting
+                                ? 'bg-emerald-400 cursor-not-allowed'
+                                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
                                 }`}
                             onClick={handleSubmit}
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Submitting...' : 'Submit Bid'}
+                            {isSubmitting ? 'שולח...' : '✨ שלח הצעה'}
                         </button>
                     )}
                 </div>
