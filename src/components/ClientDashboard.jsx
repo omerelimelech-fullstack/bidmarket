@@ -47,7 +47,7 @@ const ClientDashboard = () => {
 
     const loadDashboardData = async () => {
         setIsLoading(true);
-        console.log("Loading projects via Raw HTTP...");
+        console.log("Loading dashboard data via Raw HTTP...");
 
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -59,11 +59,10 @@ const ClientDashboard = () => {
         }
 
         try {
-            // Raw REST API Call
-            // Filter by fake ID and order by date desc
-            const url = `${supabaseUrl}/rest/v1/projects?select=*&client_id=eq.00000000-0000-0000-0000-000000000000&order=created_at.desc`;
+            // 1. Fetch Projects
+            const projectsUrl = `${supabaseUrl}/rest/v1/projects?select=*&client_id=eq.00000000-0000-0000-0000-000000000000&order=created_at.desc`;
 
-            const response = await fetch(url, {
+            const projectsResponse = await fetch(projectsUrl, {
                 method: 'GET',
                 headers: {
                     'apikey': supabaseKey,
@@ -72,30 +71,63 @@ const ClientDashboard = () => {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP Error: ${response.status}`);
+            if (!projectsResponse.ok) throw new Error(`Projects HTTP Error: ${projectsResponse.status}`);
+
+            const projectsData = await projectsResponse.json();
+            console.log("Projects Loaded:", projectsData);
+
+            // 2. Fetch Proposals for these projects
+            let dbProposals = [];
+            if (projectsData.length > 0) {
+                const projectIds = projectsData.map(p => p.id).join(',');
+                const proposalsUrl = `${supabaseUrl}/rest/v1/proposals?select=*&project_id=in.(${projectIds})`;
+
+                const proposalsResponse = await fetch(proposalsUrl, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (proposalsResponse.ok) {
+                    dbProposals = await proposalsResponse.json();
+                    console.log("Proposals Loaded:", dbProposals);
+                } else {
+                    console.error("Failed to load proposals");
+                }
             }
 
-            const data = await response.json();
-            console.log("Supabase Projects Loaded (HTTP):", data);
+            // 3. Process Data
 
-            // Load proposals (legacy local storage for now, will update later)
-            const proposals = JSON.parse(localStorage.getItem('proposals') || '[]');
-            setAllProposals(proposals);
-
-            // Merge DB projects with Mock projects
-            const dbProjects = (data || []).map(p => ({
+            // Map DB projects with real proposal counts
+            const formattedDbProjects = projectsData.map(p => ({
                 ...p,
-                proposalsCount: 0,
+                // Count proposals for this project
+                proposalsCount: dbProposals.filter(prop => prop.project_id == p.id).length,
                 date: new Date(p.created_at).toLocaleDateString('en-GB')
             }));
 
-            // Combine DB projects FIRST, then Mock projects
-            setProjects([...dbProjects, ...mockProjects]);
+            // Save Proposals to State (Merge with local if needed, but let's prioritize DB)
+            // Note: We adapt DB proposal structure to match UI expectations if needed
+            const formattedProposals = dbProposals.map(p => ({
+                ...p,
+                id: p.id,
+                projectId: p.project_id, // Map for filter compatibility
+                amount: p.amount,
+                pitch: p.pitch,
+                date: p.created_at,
+                marketerRole: 'marketer' // Default for now
+            }));
+
+            setAllProposals(formattedProposals);
+
+            // Combine Projects: DB First, then Mocks
+            setProjects([...formattedDbProjects, ...mockProjects]);
 
         } catch (error) {
             console.error("Failed to load dashboard data:", error);
-            // Fallback to minimal experience if DB fails (show mocks only)
             setProjects([...mockProjects]);
         } finally {
             setIsLoading(false);
@@ -106,34 +138,70 @@ const ClientDashboard = () => {
         loadDashboardData();
     }, []);
 
-    const handleAcceptProposal = (proposal) => {
+    const handleAcceptProposal = async (proposal) => {
         const confirmAccept = window.confirm("האם אתה בטוח שברצונך לקבל הצעה זו ולהתחיל בפרויקט?");
         if (!confirmAccept) return;
 
-        // 1. Update Project Status in LocalStorage
-        const localProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
-        const updatedProjects = localProjects.map(p => {
-            if (p.id == proposal.projectId) {
-                return { ...p, status: 'in_progress' }; // Update status to In Progress
-            }
-            return p;
-        });
-        localStorage.setItem('my_projects', JSON.stringify(updatedProjects));
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-        // 2. Update Proposal Status (Optional, good for record keeping)
-        const allProps = JSON.parse(localStorage.getItem('proposals') || '[]');
-        const updatedProps = allProps.map(p => {
-            if (p.id == proposal.id) {
-                return { ...p, status: 'accepted' };
-            }
-            return p;
-        });
-        localStorage.setItem('proposals', JSON.stringify(updatedProps));
+        if (!supabaseUrl || !supabaseKey) {
+            alert("System Error: Missing API Keys");
+            return;
+        }
 
-        // 3. UI Feedback
-        alert("🎉 ההצעה התקבלה בהצלחה! הפרויקט יצא לדרך.");
-        setShowProposalsModal(false);
-        loadDashboardData(); // Refresh list
+        try {
+            // Raw REST API Calls
+            // 1. Update Project Status to 'active'
+            const updateProject = fetch(`${supabaseUrl}/rest/v1/projects?id=eq.${proposal.projectId}`, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ status: 'active' })
+            });
+
+            // 2. Update Proposal Status to 'accepted'
+            const updateProposal = fetch(`${supabaseUrl}/rest/v1/proposals?id=eq.${proposal.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ status: 'accepted' })
+            });
+
+            const [projectRes, proposalRes] = await Promise.all([updateProject, updateProposal]);
+
+            if (!projectRes.ok) throw new Error("Failed to update project status");
+            if (!proposalRes.ok) throw new Error("Failed to update proposal status");
+
+            // 3. UI Updates
+            // Optimistic update locally
+            setProjects(prevProjects => prevProjects.map(p =>
+                p.id === proposal.projectId ? { ...p, status: 'active' } : p
+            ));
+
+            // Also update proposals list locally if needed (optional)
+            setAllProposals(prevProps => prevProps.map(p =>
+                p.id === proposal.id ? { ...p, status: 'accepted' } : p
+            ));
+
+            alert("🎉 ההצעה התקבלה בהצלחה! הפרויקט עבר לסטטוס פעיל.");
+            setShowProposalsModal(false);
+
+            // Refresh to ensure sync
+            loadDashboardData();
+
+        } catch (error) {
+            console.error("Error accepting proposal:", error);
+            alert("שגיאה בקבלת ההצעה: " + error.message);
+        }
     };
 
     const handleViewProposals = (project) => {
