@@ -64,31 +64,59 @@ const MarketerFeed = () => {
         loadProjects();
     }, []);
 
-    const loadProjects = () => {
+    const loadProjects = async () => {
         setLoading(true);
-        // Simulate network delay
-        setTimeout(() => {
-            try {
-                const localProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
+        console.log("Loading feed via Raw HTTP...");
 
-                // Merge local projects with mock projects
-                // Local projects usually don't have all fields like 'urgency' populated by wizard yet, so we define defaults
-                const formattedLocalProjects = localProjects.map(p => ({
-                    ...p,
-                    source: 'local',
-                    urgency: p.urgency || 'normal'
-                }));
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-                // Combine: Newest (Local) First
-                const allProjects = [...formattedLocalProjects, ...MOCK_PROJECTS];
-                setProjects(allProjects);
-            } catch (e) {
-                console.error("Failed to load projects", e);
-                setProjects(MOCK_PROJECTS);
-            } finally {
-                setLoading(false);
+        if (!supabaseUrl || !supabaseKey) {
+            console.error("Missing DB Keys");
+            setLoading(false);
+            setProjects(MOCK_PROJECTS);
+            return;
+        }
+
+        try {
+            // Raw REST API Call
+            // Filter by status=open and order by date desc
+            const url = `${supabaseUrl}/rest/v1/projects?select=*&status=eq.open&order=created_at.desc`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
             }
-        }, 800);
+
+            const data = await response.json();
+            console.log("Feed loaded:", data);
+
+            // Format DB projects to match component structure
+            const dbProjects = (data || []).map(p => ({
+                ...p,
+                service: p.category || 'general', // Map category to service for icon
+                source: 'db',
+                urgency: 'normal', // Default if missing
+                date: new Date(p.created_at).toLocaleDateString('en-GB')
+            }));
+
+            // Combine: DB projects first, then Mocks
+            setProjects([...dbProjects, ...MOCK_PROJECTS]);
+
+        } catch (e) {
+            console.error("Failed to load projects", e);
+            setProjects(MOCK_PROJECTS);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleOpenProposal = (project) => {

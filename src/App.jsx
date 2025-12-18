@@ -22,94 +22,44 @@ function App() {
   const [status, setStatus] = useState('מאתחל...');
 
   useEffect(() => {
-    let mounted = true;
-
-    // 1. Failsafe Timeout: Force stop loading after 2 seconds no matter what
-    const failsafe = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth check timed out - forcing app as Client');
-        setUserRole('client'); // Default to client on timeout
-        setLoading(false);
-      }
-    }, 2000);
-
-    const initAuth = async () => {
-      if (!supabase) {
-        if (mounted) setLoading(false);
-        return;
-      }
-
-      try {
-        if (mounted) setStatus('בודק חיבור...');
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        if (mounted) setSession(initialSession);
-
-        if (initialSession) {
-          if (mounted) setStatus('טוען הרשאות...');
-          await resolveUserRole(initialSession.user);
-        }
-      } catch (e) {
-        console.error("Auth init failed", e);
-      } finally {
-        clearTimeout(failsafe);
-        if (mounted) setLoading(false);
-      }
-    };
-
-    initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      if (event === 'SIGNED_OUT') {
+    // Helper to handle session updates
+    const handleSession = (session) => {
+      if (!session) {
+        console.log("No active session. User is Guest.");
         setSession(null);
         setUserRole(null);
         setLoading(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(session);
-        if (session && !userRole) {
-          await resolveUserRole(session.user);
-        }
+        return;
       }
+
+      setSession(session);
+
+      // Strict Role Check
+      const role = session.user?.user_metadata?.role;
+
+      if (role) {
+        console.log("User Role Found:", role);
+        setUserRole(role);
+      } else {
+        console.error("CRITICAL: User is logged in but has NO ROLE in metadata.");
+        // Option: Sign them out if data is corrupted, or just leave role null so they can't access dashboards
+        setUserRole(null);
+      }
+      setLoading(false);
+    };
+
+    // 1. Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleSession(session);
     });
 
-    return () => {
-      mounted = false;
-      clearTimeout(failsafe);
-      subscription?.unsubscribe();
-    };
+    // 2. Listen for auth changes (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
-
-  // Robust Role Resolver
-  const resolveUserRole = async (user) => {
-    // 1. Check Metadata
-    if (user?.user_metadata?.role) {
-      setUserRole(user.user_metadata.role);
-      return;
-    }
-
-    // 2. Check Database
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (data?.role) {
-        setUserRole(data.role);
-      } else {
-        console.warn("Role missing in DB, defaulting to Client.");
-        setUserRole('client');
-      }
-    } catch (err) {
-      console.error('Error fetching role, defaulting to Client:', err);
-      setUserRole('client');
-    }
-  };
 
   // Nuclear Logout
   const handleSignOut = async () => {
@@ -138,12 +88,12 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50 font-['Heebo'] flex flex-row-reverse">
+      <div dir="rtl" className="min-h-screen bg-slate-50 font-['Heebo'] flex">
         {/* Sidebar (Right) */}
         <Sidebar userRole={userRole || 'client'} onSignOut={handleSignOut} />
 
         {/* Main Content Area */}
-        <main className="flex-1 mr-64 transition-all duration-300">
+        <main className="flex-1 transition-all duration-300">
           <div className="max-w-7xl mx-auto py-10 px-8">
             <Routes>
               {/* Client Routes - Default */}

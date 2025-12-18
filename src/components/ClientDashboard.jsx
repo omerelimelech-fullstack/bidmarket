@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Users, Wallet, ArrowUpRight, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 const ClientDashboard = () => {
     // 1. Mock Data in Hebrew
@@ -42,28 +43,63 @@ const ClientDashboard = () => {
     const [allProposals, setAllProposals] = useState([]);
     const [showProposalsModal, setShowProposalsModal] = useState(false);
     const [selectedProjectForProposals, setSelectedProjectForProposals] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const loadDashboardData = () => {
-        // Load local projects
-        const localProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
-        const proposals = JSON.parse(localStorage.getItem('proposals') || '[]');
+    const loadDashboardData = async () => {
+        setIsLoading(true);
+        console.log("Loading projects via Raw HTTP...");
 
-        console.log("--------------------------------------------------");
-        console.log("ClientDashboard: Loaded Proposals:", proposals);
-        console.log("ClientDashboard: Loaded Projects:", localProjects);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-        setAllProposals(proposals);
+        if (!supabaseUrl || !supabaseKey) {
+            console.error("Missing DB Keys");
+            setIsLoading(false);
+            return;
+        }
 
-        // Merge projects and update counts
-        const mergedProjects = [...localProjects, ...mockProjects].map(p => {
-            const count = proposals.filter(prop => prop.projectId == p.id).length;
-            return {
+        try {
+            // Raw REST API Call
+            // Filter by fake ID and order by date desc
+            const url = `${supabaseUrl}/rest/v1/projects?select=*&client_id=eq.00000000-0000-0000-0000-000000000000&order=created_at.desc`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("Supabase Projects Loaded (HTTP):", data);
+
+            // Load proposals (legacy local storage for now, will update later)
+            const proposals = JSON.parse(localStorage.getItem('proposals') || '[]');
+            setAllProposals(proposals);
+
+            // Merge DB projects with Mock projects
+            const dbProjects = (data || []).map(p => ({
                 ...p,
-                proposalsCount: count
-            };
-        });
+                proposalsCount: 0,
+                date: new Date(p.created_at).toLocaleDateString('en-GB')
+            }));
 
-        setProjects(mergedProjects);
+            // Combine DB projects FIRST, then Mock projects
+            setProjects([...dbProjects, ...mockProjects]);
+
+        } catch (error) {
+            console.error("Failed to load dashboard data:", error);
+            // Fallback to minimal experience if DB fails (show mocks only)
+            setProjects([...mockProjects]);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -145,6 +181,15 @@ const ClientDashboard = () => {
 
     return (
         <div className="space-y-8 animate-fade-in text-right" dir="rtl">
+
+            {isLoading && (
+                <div className="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-xl font-bold text-slate-800 animate-pulse">טוען פרויקטים...</p>
+                    </div>
+                </div>
+            )}
 
             {/* Header */}
             <div>

@@ -40,53 +40,60 @@ const Wizard = () => {
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
+        console.log("--- RAW HTTP MODE ---");
 
-        // 1. Create Local Project Object
-        const newProject = {
-            id: Math.floor(Math.random() * 10000).toString(),
-            title: getProductTitle(selectedProduct),
-            status: 'active', // 'active' for 'פעיל' per dashboard logic
-            budget: `₪${Number(budget).toLocaleString()}`,
-            proposalsCount: 0,
-            date: new Date().toLocaleDateString('en-GB'),
-            description: projectDescription,
-            package: selectedPackage
-        };
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-        // 2. Save to LocalStorage IMMEDIATELY
-        try {
-            console.log("Saving project to localStorage...", newProject);
-            const existingProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
-            localStorage.setItem('my_projects', JSON.stringify([newProject, ...existingProjects]));
-        } catch (e) {
-            console.error("Local storage error", e);
-        }
-
-        // 3. Attempt Supabase Save (Backup/Real DB) in parallel - DO NOT AWAIT blocking the UI
-        try {
-            if (supabase) {
-                const finalService = `${selectedProduct}_${selectedPackage}`;
-                // Fire and forget, or handle silently
-                supabase.from('bids').insert([{
-                    service: finalService,
-                    scope_approved: true,
-                    budget: Number(budget),
-                    status: 'open',
-                }]).then(({ error }) => {
-                    if (error) console.error('Supabase background save error:', error);
-                    else console.log('Supabase background save success');
-                });
-            }
-        } catch (error) {
-            console.error('Supabase error:', error);
-        }
-
-        // 4. Force Redirect after short delay to show "Processing" state
-        setTimeout(() => {
+        if (!supabaseUrl || !supabaseKey) {
+            alert("Missing API Keys in .env");
             setIsSubmitting(false);
-            console.log("Redirecting to dashboard...");
+            return;
+        }
+
+        try {
+            console.log("Sending HTTP POST request...");
+
+            // 1. Construct the REST Endpoint URL
+            const url = `${supabaseUrl}/rest/v1/projects`;
+
+            // 2. Send Data using standard fetch (No Supabase Library)
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal' // Don't need the data back, just success
+                },
+                body: JSON.stringify({
+                    client_id: "00000000-0000-0000-0000-000000000000", // Fake ID
+                    title: getProductTitle(selectedProduct),
+                    category: selectedProduct,
+                    package_type: selectedPackage,
+                    description: projectDescription,
+                    budget: Number(budget),
+                    timeline: timeline,
+                    status: 'open'
+                })
+            });
+
+            // 3. Check Network Response
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(JSON.stringify(errorData));
+            }
+
+            console.log("HTTP SUCCESS!");
+            alert("Project posted via Raw HTTP!");
             navigate('/client-dashboard');
-        }, 1500);
+
+        } catch (error) {
+            console.error("HTTP Failed:", error);
+            alert("Network Error: " + error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
