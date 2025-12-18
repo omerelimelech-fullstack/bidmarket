@@ -14,7 +14,7 @@ const PlaceholderPage = ({ title, icon }) => (
     </div>
 );
 
-export const ClientDashboard = () => <PlaceholderPage title="לוח בקרה (Client Dashboard)" icon="📊" />;
+// export const ClientDashboard = () => <PlaceholderPage title="לוח בקרה (Client Dashboard)" icon="📊" />;
 export const MySquad = () => <PlaceholderPage title="הצוות שלי (My Squad)" icon="👥" />;
 export const Approvals = () => <PlaceholderPage title="אישורים (Approvals)" icon="✅" />;
 export const Wallet = () => <PlaceholderPage title="ארנק וחשבוניות (Wallet)" icon="💳" />;

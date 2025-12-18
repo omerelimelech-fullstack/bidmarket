@@ -13,7 +13,9 @@ import {
     LogOut
 } from 'lucide-react';
 
-const Sidebar = ({ userRole, onSignOut }) => {
+import { supabase } from '../supabaseClient';
+
+const Sidebar = ({ userRole }) => {
 
     const clientLinks = [
         { to: '/client-dashboard', label: 'לוח בקרה', icon: LayoutDashboard },
@@ -24,13 +26,35 @@ const Sidebar = ({ userRole, onSignOut }) => {
     ];
 
     const marketerLinks = [
-        { to: '/feed', label: 'פיד הזדמנויות', icon: Zap },
+        { to: '/marketer-feed', label: 'פיד הזדמנויות', icon: Zap },
         { to: '/workspace', label: 'אזור עבודה', icon: Briefcase },
         { to: '/earnings', label: 'רווחים', icon: DollarSign },
         { to: '/profile', label: 'פרופיל', icon: User },
     ];
 
     const links = userRole === 'client' ? clientLinks : userRole === 'marketer' ? marketerLinks : [];
+
+    const handleLogout = () => {
+        console.log("Sidebar performing smart logout...");
+
+        // 1. Backup the critical data we want to KEEP
+        const projects = localStorage.getItem('my_projects');
+        const proposals = localStorage.getItem('proposals');
+
+        // 2. Clear EVERYTHING (this ensures the Supabase session token is destroyed)
+        localStorage.clear();
+        sessionStorage.clear();
+
+        // 3. Restore the data immediately
+        if (projects) localStorage.setItem('my_projects', projects);
+        if (proposals) localStorage.setItem('proposals', proposals);
+
+        // 4. Fire and forget - Sign out from server (optional)
+        supabase.auth.signOut();
+
+        // 5. Force reload to Login page
+        window.location.href = '/';
+    };
 
     return (
         <div className="w-64 bg-slate-900 text-white h-screen fixed top-0 right-0 flex flex-col z-50 shadow-2xl overflow-y-auto border-l border-slate-800">
@@ -66,8 +90,8 @@ const Sidebar = ({ userRole, onSignOut }) => {
             {/* Footer / Sign Out */}
             <div className="p-4 border-t border-slate-800">
                 <button
-                    onClick={onSignOut}
-                    className="flex items-center gap-3 px-3 py-3 w-full text-slate-400 hover:bg-slate-800 hover:text-red-400 rounded-lg transition-colors group"
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 px-3 py-3 w-full text-slate-400 hover:bg-slate-800 hover:text-red-400 rounded-lg transition-colors group cursor-pointer"
                 >
                     <LogOut className="w-5 h-5 group-hover:text-red-400 transition-colors" />
                     <span className="font-medium text-sm">התנתק</span>

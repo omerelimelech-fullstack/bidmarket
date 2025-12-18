@@ -19,6 +19,11 @@ const Auth = () => {
                 const { data, error: signUpError } = await supabase.auth.signUp({
                     email: email.trim(),
                     password,
+                    options: {
+                        data: {
+                            role: role
+                        }
+                    }
                 });
 
                 if (signUpError) throw signUpError;
@@ -111,8 +116,8 @@ const Auth = () => {
                                     type="button"
                                     onClick={() => setRole('client')}
                                     className={`p-4 rounded-xl border-2 text-center transition-all ${role === 'client'
-                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
-                                            : 'border-slate-200 hover:border-indigo-300 text-slate-600 bg-white'
+                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
+                                        : 'border-slate-200 hover:border-indigo-300 text-slate-600 bg-white'
                                         }`}
                                 >
                                     <div className="text-2xl mb-2">💼</div>
@@ -123,8 +128,8 @@ const Auth = () => {
                                     type="button"
                                     onClick={() => setRole('marketer')}
                                     className={`p-4 rounded-xl border-2 text-center transition-all ${role === 'marketer'
-                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
-                                            : 'border-slate-200 hover:border-indigo-300 text-slate-600 bg-white'
+                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
+                                        : 'border-slate-200 hover:border-indigo-300 text-slate-600 bg-white'
                                         }`}
                                 >
                                     <div className="text-2xl mb-2">🚀</div>

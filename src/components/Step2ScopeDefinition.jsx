@@ -119,7 +119,7 @@ const packages = {
     ]
 };
 
-const Step2ScopeDefinition = ({ selectedProduct, selectedPackage, onSelectPackage }) => {
+const Step2ScopeDefinition = ({ selectedProduct, selectedPackage, onSelectPackage, projectDescription, setProjectDescription }) => {
     const currentPackages = packages[selectedProduct] || packages['instagram'];
 
     return (
@@ -135,15 +135,15 @@ const Step2ScopeDefinition = ({ selectedProduct, selectedPackage, onSelectPackag
                             key={pkg.id}
                             onClick={() => onSelectPackage(pkg.id)}
                             className={`relative bg-white rounded-2xl p-6 border-2 transition-all duration-200 cursor-pointer flex flex-col ${isSelected
-                                    ? 'border-indigo-600 shadow-xl transform -translate-y-1 ring-2 ring-indigo-100'
-                                    : 'border-slate-100 hover:border-slate-300 hover:shadow-lg'
+                                ? 'border-indigo-600 shadow-xl transform -translate-y-1 ring-2 ring-indigo-100'
+                                : 'border-slate-100 hover:border-slate-300 hover:shadow-lg'
                                 }`}
                         >
                             {/* Selection Indicator */}
                             <div className="flex justify-between items-center mb-4">
                                 <span className={`text-sm font-bold px-3 py-1 rounded-full uppercase tracking-wider ${pkg.id === 'pro' ? 'bg-emerald-100 text-emerald-800' :
-                                        pkg.id === 'advanced' ? 'bg-indigo-100 text-indigo-800' :
-                                            'bg-slate-100 text-slate-600'
+                                    pkg.id === 'advanced' ? 'bg-indigo-100 text-indigo-800' :
+                                        'bg-slate-100 text-slate-600'
                                     }`}>
                                     {pkg.hebrewName}
                                 </span>
@@ -177,6 +177,31 @@ const Step2ScopeDefinition = ({ selectedProduct, selectedPackage, onSelectPackag
                         </div>
                     );
                 })}
+            </div>
+
+            {/* Project Description Input */}
+            <div className="mt-10">
+                <label className="block text-slate-900 font-bold mb-3 text-lg">
+                    תיאור הפרויקט
+                    <span className="text-red-500 mr-1">*</span>
+                </label>
+                <div className="relative">
+                    <textarea
+                        value={projectDescription}
+                        onChange={(e) => setProjectDescription(e.target.value)}
+                        placeholder="ספר לנו בכמה מילים על העסק, המטרות שלך והציפיות מהשירות..."
+                        className="w-full p-6 bg-slate-50 border border-slate-200 rounded-2xl h-40 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-medium text-slate-900 placeholder-slate-400 resize-none"
+                    ></textarea>
+                    {projectDescription.length > 0 && (
+                        <div className="absolute bottom-4 left-4 text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                            {projectDescription.length} תווים
+                        </div>
+                    )}
+                </div>
+                <p className="text-slate-400 text-sm mt-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    תיאור מפורט יעזור לנו למצוא לך את ההתאמה המדויקת ביותר.
+                </p>
             </div>
         </div>
     );

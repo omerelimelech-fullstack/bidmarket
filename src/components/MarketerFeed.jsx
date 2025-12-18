@@ -1,241 +1,348 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+
+const MOCK_PROJECTS = [
+    {
+        id: 'm1',
+        title: 'ניהול עמוד אינסטגרם למותג אופנה',
+        service: 'instagram',
+        package: 'premium',
+        budget: 4500,
+        urgency: 'urgent',
+        status: 'open',
+        description: 'דרוש מנהל/ת למותג אופנה צומח. כולל יצירת תוכן, רילס, וסטוריז יומיומיים. נדרש ניסיון קודם בתחום.',
+        date: new Date(Date.now() - 86400000 * 2).toLocaleDateString('en-GB'), // 2 days ago
+        scope_approved: true
+    },
+    {
+        id: 'm2',
+        title: 'קידום אורגני לאתר איקומרס',
+        service: 'seo',
+        package: 'standard',
+        budget: 3200,
+        urgency: 'flexible',
+        status: 'open',
+        description: 'אופטימיזציה למנועי חיפוש לחנות וירטואלית בתחום הבית והגן. דגש על מחקר מילים וקישורים.',
+        date: new Date(Date.now() - 86400000 * 5).toLocaleDateString('en-GB'),
+        scope_approved: true
+    },
+    {
+        id: 'm3',
+        title: 'קמפיין PPC ממוקד לידים',
+        service: 'ppc',
+        package: 'basic',
+        budget: 2500,
+        urgency: 'normal',
+        status: 'open',
+        description: 'הקמה וניהול קמפיין ממומן בפייסבוק ואינסטגרם לעסק נותן שירותים. תקציב מדיה נפרד.',
+        date: new Date(Date.now() - 86400000 * 1).toLocaleDateString('en-GB'),
+        scope_approved: true
+    },
+    {
+        id: 'm4',
+        title: 'מיתוג מחדש ושפה ויזואלית',
+        service: 'branding',
+        package: 'premium',
+        budget: 8000,
+        urgency: 'urgent',
+        status: 'open',
+        description: 'עיצוב לוגו, ספר מותג, ועיצובים לרשתות חברתיות עבור סטארטאפ בתחום הפינטק.',
+        date: new Date(Date.now() - 86400000 * 3).toLocaleDateString('en-GB'),
+        scope_approved: false
+    }
+];
 
 const MarketerFeed = () => {
-    const [bids, setBids] = useState([]);
+    const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [minPrice, setMinPrice] = useState(2000);
+    const [selectedProject, setSelectedProject] = useState(null); // For proposal modal
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showProposalModal, setShowProposalModal] = useState(false);
+    const [proposalAmount, setProposalAmount] = useState('');
+    const [proposalPitch, setProposalPitch] = useState('');
 
     useEffect(() => {
-        fetchBids();
+        loadProjects();
     }, []);
 
-    const fetchBids = async () => {
-        try {
-            if (!supabase) {
-                throw new Error('Supabase client not initialized');
+    const loadProjects = () => {
+        setLoading(true);
+        // Simulate network delay
+        setTimeout(() => {
+            try {
+                const localProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
+
+                // Merge local projects with mock projects
+                // Local projects usually don't have all fields like 'urgency' populated by wizard yet, so we define defaults
+                const formattedLocalProjects = localProjects.map(p => ({
+                    ...p,
+                    source: 'local',
+                    urgency: p.urgency || 'normal'
+                }));
+
+                // Combine: Newest (Local) First
+                const allProjects = [...formattedLocalProjects, ...MOCK_PROJECTS];
+                setProjects(allProjects);
+            } catch (e) {
+                console.error("Failed to load projects", e);
+                setProjects(MOCK_PROJECTS);
+            } finally {
+                setLoading(false);
             }
-
-            const { data, error } = await supabase
-                .from('bids')
-                .select('*')
-                .eq('status', 'open')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setBids(data || []);
-        } catch (err) {
-            console.error('Error fetching bids:', err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+        }, 800);
     };
 
-    const handleClaim = async (bidId) => {
-        setBids(currentBids => currentBids.filter(bid => bid.id !== bidId));
-        setShowSuccessModal(true);
+    const handleOpenProposal = (project) => {
+        setSelectedProject(project);
+        setProposalAmount(project.budget || '');
+        setProposalPitch('');
+        setShowProposalModal(true);
+    };
 
+    const handleSubmitProposal = (e) => {
+        e.preventDefault();
+
+        const proposal = {
+            id: Math.random().toString(36).substr(2, 9),
+            projectId: selectedProject.id,
+            projectTitle: selectedProject.title,
+            marketerRole: 'marketer', // As requested
+            amount: proposalAmount,
+            pitch: proposalPitch,
+            date: new Date().toISOString()
+        };
+
+        // Save to localStorage
         try {
-            const { error } = await supabase
-                .from('bids')
-                .update({ status: 'matched' })
-                .eq('id', bidId);
+            const currentProposals = JSON.parse(localStorage.getItem('proposals') || '[]');
+            localStorage.setItem('proposals', JSON.stringify([proposal, ...currentProposals]));
+            console.log('Proposal saved:', proposal);
+        } catch (error) {
+            console.error('Error saving proposal:', error);
+        }
 
-            if (error) {
-                throw error;
-            }
-        } catch (err) {
-            console.error('Error claiming bid:', err);
-            alert('שגיאה בעדכון הסטטוס. אנא רענן את העמוד.');
+        setShowProposalModal(false);
+        setTimeout(() => {
+            setShowSuccessModal(true);
+        }, 300);
+    };
+
+    const closeSuccessModal = () => {
+        setShowSuccessModal(false);
+        setSelectedProject(null);
+    };
+
+    const getServiceIcon = (service) => {
+        const s = (service || '').toLowerCase();
+        if (s.includes('instagram')) return '📸';
+        if (s.includes('seo')) return '🔍';
+        if (s.includes('ppc')) return '📈';
+        if (s.includes('branding')) return '🎨';
+        return '💼';
+    };
+
+    const getUrgencyBadge = (urgency) => {
+        switch (urgency) {
+            case 'urgent':
+                return <span className="bg-red-50 text-red-600 px-2 py-1 rounded-md text-xs font-bold border border-red-100 flex items-center gap-1">🔥 דחוף</span>;
+            case 'flexible':
+                return <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md text-xs font-bold border border-blue-100">📅 גמיש</span>;
+            default:
+                return <span className="bg-slate-50 text-slate-600 px-2 py-1 rounded-md text-xs font-bold border border-slate-200">⚡ רגיל</span>;
         }
     };
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-[50vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                <p className="text-slate-500 font-medium animate-pulse">מחפש פרויקטים מתאימים...</p>
             </div>
         );
     }
 
-    if (error) {
-        return (
-            <div className="flex items-center justify-center h-[50vh]">
-                <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-200 max-w-md text-center">
-                    <p className="font-bold mb-2 text-lg">שגיאה בטעינת הפיד</p>
-                    <p className="mb-6">{error}</p>
-                    <button
-                        onClick={fetchBids}
-                        className="px-6 py-2 bg-white border border-red-200 hover:bg-red-50 rounded-lg text-sm font-bold transition-colors"
-                    >
-                        נסה שוב
+    return (
+        <div className=" pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+                <div>
+                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">לוח פרויקטים</h1>
+                    <p className="text-slate-500 mt-2 text-lg">מצא את האתגר הבא שלך מתוך {projects.length} פרויקטים פעילים</p>
+                </div>
+
+                <div className="flex gap-3">
+                    <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-colors shadow-sm">
+                        סינון מתקדם
+                    </button>
+                    <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200">
+                        התראות חדשות
                     </button>
                 </div>
             </div>
-        );
-    }
 
-    const serviceNames = {
-        'instagram': 'אינסטגרם אורגני',
-        'ppc': 'קמפיין ממומן',
-        'seo': 'קידום אורגני'
-    };
-
-    return (
-        <div>
-            {/* Feed Header */}
-            <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">פיד הזדמנויות</h1>
-                    <p className="text-slate-500">איתור פרויקטים מובילים בשוק</p>
-                </div>
-
-                <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-                    <div className="px-4 border-l border-slate-100">
-                        <label className="block text-xs font-bold text-slate-400 mb-1">המינימום שלי (₪)</label>
-                        <input
-                            type="number"
-                            value={minPrice}
-                            onChange={(e) => setMinPrice(Number(e.target.value))}
-                            className="w-32 font-bold text-indigo-900 focus:outline-none bg-transparent"
-                            placeholder="0"
-                        />
-                    </div>
-                    <div className="px-4 flex items-center gap-2">
-                        <span className="flex h-3 w-3 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
-                        <span className="text-sm font-bold text-slate-600">
-                            {bids.length} פעילים
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Grid */}
-            {bids.length === 0 ? (
-                <div className="text-center py-24 bg-white rounded-3xl shadow-sm border border-slate-100">
-                    <div className="text-7xl mb-6 opacity-30">📭</div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">אין הצעות כרגע</h3>
-                    <p className="text-slate-500">הפיד מתעדכן בזמן אמת. חזור בקרוב.</p>
+            {/* Projects Grid */}
+            {projects.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
+                    <div className="text-6xl mb-4">📭</div>
+                    <h3 className="text-xl font-bold text-slate-900">אין פרויקטים כרגע</h3>
+                    <p className="text-slate-500">נסה לשנות את הגדרות הסינון או חזור מאוחר יותר</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {bids.map((bid) => {
-                        const budget = bid.budget || 0;
-                        const isPerfectMatch = budget >= minPrice;
-                        const isGapOpportunity = !isPerfectMatch && budget >= (minPrice * 0.85);
-                        const isNoMatch = budget < (minPrice * 0.85);
-
-                        return (
-                            <div
-                                key={bid.id}
-                                className={`bg-white rounded-2xl border transition-all duration-300 flex flex-col group relative ${isNoMatch
-                                    ? 'border-slate-100 opacity-60 grayscale hover:grayscale-0 hover:opacity-100'
-                                    : 'border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-100'
-                                    }`}
-                            >
-                                <div className="p-7 flex-1">
-                                    {/* Top Badge Row */}
-                                    <div className="flex justify-between items-start mb-6">
-                                        {isPerfectMatch ? (
-                                            <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border border-emerald-100">
-                                                התאמה מושלמת
-                                            </span>
-                                        ) : isGapOpportunity ? (
-                                            <span className="bg-amber-50 text-amber-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border border-amber-100">
-                                                הזדמנות
-                                            </span>
-                                        ) : (
-                                            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border border-slate-200">
-                                                תקציב נמוך
-                                            </span>
-                                        )}
-                                        <span className="text-slate-400 text-xs font-medium bg-slate-50 px-2 py-1 rounded-md">
-                                            {new Date(bid.created_at).toLocaleDateString('he-IL')}
-                                        </span>
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="mb-6">
-                                        <h3 className="text-xl font-bold text-slate-900 mb-1">
-                                            {serviceNames[bid.service] || bid.service}
-                                        </h3>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className={`text-3xl font-extrabold ${isNoMatch ? 'text-slate-400' : 'text-slate-900'}`}>
-                                                ₪{budget.toLocaleString()}
-                                            </span>
-                                            <span className="text-slate-400 text-sm font-medium">/חודש</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {projects.map((project, index) => (
+                        <div
+                            key={project.id || index}
+                            className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all duration-300 group flex flex-col"
+                        >
+                            <div className="p-6 flex-1">
+                                {/* Card Header */}
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl border border-indigo-100 group-hover:scale-110 transition-transform">
+                                            {getServiceIcon(project.service || project.title)}
                                         </div>
-                                    </div>
-
-                                    {/* Details */}
-                                    <div className="space-y-3 mb-8">
-                                        <div className="flex items-center text-slate-600 text-sm font-medium">
-                                            <div className="w-6 flex justify-center">
-                                                <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="font-bold text-slate-900 line-clamp-1 text-lg" title={project.title}>
+                                                    {project.title}
+                                                </h3>
                                             </div>
-                                            היקף מאושר: {bid.scope_approved ? 'כן' : 'לא'}
-                                        </div>
-                                        <div className="flex items-center text-slate-600 text-sm font-medium">
-                                            <div className="w-6 flex justify-center">
-                                                <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                                                </svg>
-                                            </div>
-                                            עבודה מרחוק / אונליין
+                                            <p className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                                                פורסם: {project.date || 'היום'}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Action Footer */}
-                                <div className="p-5 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
-                                    <button
-                                        disabled={isNoMatch}
-                                        onClick={() => handleClaim(bid.id)}
-                                        className={`w-full py-3.5 rounded-xl font-bold transition-all shadow-md group flex items-center justify-center gap-2 ${isNoMatch
-                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                            : isPerfectMatch
-                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
-                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                                            }`}
-                                    >
-                                        <span>{isPerfectMatch ? 'קבל פרויקט מיידית' : 'הגש מועמדות'}</span>
-                                        {!isNoMatch && (
-                                            <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                            </svg>
-                                        )}
-                                    </button>
+                                {/* Badges */}
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {getUrgencyBadge(project.urgency)}
+                                    <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-bold border border-emerald-100">
+                                        💰 {typeof project.budget === 'number' ? `₪${project.budget.toLocaleString()}` : project.budget}
+                                    </span>
+                                    {project.source === 'local' && (
+                                        <span className="bg-purple-50 text-purple-600 px-2 py-1 rounded-md text-xs font-bold border border-purple-100">
+                                            🌟 חדש
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Description */}
+                                <p className="text-slate-600 text-sm leading-relaxed line-clamp-3 mb-4 min-h-[4.5em]">
+                                    {project.description || 'אין תיאור זמין לפרויקט זה. מומלץ ליצור קשר לקבלת פרטים נוספים.'}
+                                </p>
+
+                                {/* Verification */}
+                                {project.scope_approved && (
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
+                                        <svg className="w-4 h-4 text-sky-500 fill-current" viewBox="0 0 20 20">
+                                            <path d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>תקציב מאומת</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl mt-auto">
+                                <button
+                                    onClick={() => handleOpenProposal(project)}
+                                    className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all shadow-md shadow-indigo-100 hover:shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <span>שלח הצעה</span>
+                                    <svg className="w-4 h-4 rtl:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Proposal Modal */}
+            {showProposalModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in font-['Heebo']">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-scale-in border border-slate-100">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-slate-800">הגשת הצעה לפרויקט</h3>
+                            <button onClick={() => setShowProposalModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmitProposal}>
+                            <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <p className="text-sm text-slate-500 mb-1">פרויקט:</p>
+                                <p className="font-bold text-slate-900">{selectedProject?.title}</p>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">הצעת מחיר (₪)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            required
+                                            value={proposalAmount}
+                                            onChange={(e) => setProposalAmount(e.target.value)}
+                                            className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all pl-10"
+                                            placeholder="0.00"
+                                        />
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₪</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">למה דווקא אני? (Brief Pitch)</label>
+                                    <textarea
+                                        required
+                                        rows="4"
+                                        value={proposalPitch}
+                                        onChange={(e) => setProposalPitch(e.target.value)}
+                                        className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none"
+                                        placeholder="פרט את הניסיון הרלוונטי שלך ולמה אתה מתאים לפרויקט זה..."
+                                    ></textarea>
                                 </div>
                             </div>
-                        );
-                    })}
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProposalModal(false)}
+                                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+                                >
+                                    ביטול
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-boldshadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-1"
+                                >
+                                    🚀 שלח הצעה
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
 
             {/* Success Modal */}
             {showSuccessModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in font-['Heebo']">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center transform animate-bounce-subtle border border-white/20">
-                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                            <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                            </svg>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in font-['Heebo']">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center border border-white/20 animate-scale-in">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce-subtle">
+                            <span className="text-3xl">🚀</span>
                         </div>
-                        <h3 className="text-3xl font-extrabold text-slate-900 mb-3">ברכות! 🎉</h3>
-                        <p className="text-slate-500 mb-8 text-lg leading-relaxed">זכית בעסקה! פרטי ההתקשרות נשלחו למייל שלך.</p>
+                        <h3 className="text-2xl font-bold text-slate-900 mb-2">ההצעה נשלחה!</h3>
+                        <p className="text-slate-500 mb-6 text-sm">
+                            ההצעה שלך לפרויקט <span className="font-bold text-slate-800">"{selectedProject?.title}"</span> התקבלה בהצלחה והועברה ללקוח.
+                        </p>
                         <button
-                            onClick={() => setShowSuccessModal(false)}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-200 transition-transform transform hover:-translate-y-1 active:translate-y-0"
+                            onClick={closeSuccessModal}
+                            className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-transform transform hover:-translate-y-1"
                         >
-                            חזרה לפיד
+                            מעולה, תודה
                         </button>
                     </div>
                 </div>

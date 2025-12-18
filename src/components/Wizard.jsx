@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Step1ProductSelection from './Step1ProductSelection';
 import Step2ScopeDefinition from './Step2ScopeDefinition';
 import Step3TheBid from './Step3TheBid';
 import { supabase } from '../supabaseClient';
 
 const Wizard = () => {
+    const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [selectedPackage, setSelectedPackage] = useState(null); // Changed from scopeApproved
+    const [selectedPackage, setSelectedPackage] = useState(null);
     const [budget, setBudget] = useState('');
+    const [projectDescription, setProjectDescription] = useState('');
+    const [timeline, setTimeline] = useState('flexible'); // Default to flexible
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleNext = () => {
         if (currentStep === 1 && selectedProduct) {
             setCurrentStep(2);
-        } else if (currentStep === 2 && selectedPackage) { // Check package selection
+        } else if (currentStep === 2 && selectedPackage && projectDescription.trim()) {
             setCurrentStep(3);
         }
     };
@@ -25,42 +29,64 @@ const Wizard = () => {
         }
     };
 
+    const getProductTitle = (id) => {
+        const titles = {
+            instagram: 'אינסטגרם אורגני',
+            ppc: 'קמפיין ממומן (PPC)',
+            seo: 'קידום אורגני (SEO)'
+        };
+        return titles[id] || id;
+    };
+
     const handleSubmit = async () => {
         setIsSubmitting(true);
+
+        // 1. Create Local Project Object
+        const newProject = {
+            id: Math.floor(Math.random() * 10000).toString(),
+            title: getProductTitle(selectedProduct),
+            status: 'active', // 'active' for 'פעיל' per dashboard logic
+            budget: `₪${Number(budget).toLocaleString()}`,
+            proposalsCount: 0,
+            date: new Date().toLocaleDateString('en-GB'),
+            description: projectDescription,
+            package: selectedPackage
+        };
+
+        // 2. Save to LocalStorage IMMEDIATELY
         try {
-            if (!supabase) {
-                throw new Error('Supabase client is not initialized. Check your .env file.');
-            }
-
-            // Combine product and package for the service field
-            // e.g. "instagram_advanced"
-            const finalService = `${selectedProduct}_${selectedPackage}`;
-
-            const { data, error } = await supabase
-                .from('bids')
-                .insert([
-                    {
-                        service: finalService,
-                        scope_approved: true, // Legacy field, keeping expected boolean
-                        budget: Number(budget),
-                        status: 'open'
-                    },
-                ]);
-
-            if (error) throw error;
-
-            alert('ההצעה הוגשה בהצלחה!');
-            // Reset wizard
-            setCurrentStep(1);
-            setSelectedProduct(null);
-            setSelectedPackage(null);
-            setBudget('');
-        } catch (error) {
-            console.error('Error submitting bid:', error);
-            alert(error.message || 'שגיאה בהגשת הצעה. אנא נסה שוב.');
-        } finally {
-            setIsSubmitting(false);
+            console.log("Saving project to localStorage...", newProject);
+            const existingProjects = JSON.parse(localStorage.getItem('my_projects') || '[]');
+            localStorage.setItem('my_projects', JSON.stringify([newProject, ...existingProjects]));
+        } catch (e) {
+            console.error("Local storage error", e);
         }
+
+        // 3. Attempt Supabase Save (Backup/Real DB) in parallel - DO NOT AWAIT blocking the UI
+        try {
+            if (supabase) {
+                const finalService = `${selectedProduct}_${selectedPackage}`;
+                // Fire and forget, or handle silently
+                supabase.from('bids').insert([{
+                    service: finalService,
+                    scope_approved: true,
+                    budget: Number(budget),
+                    status: 'open',
+                }]).then(({ error }) => {
+                    if (error) console.error('Supabase background save error:', error);
+                    else console.log('Supabase background save success');
+                });
+            }
+        } catch (error) {
+            console.error('Supabase error:', error);
+        }
+
+        // 4. Force Redirect after short delay to show "Processing" state
+        setTimeout(() => {
+            setIsSubmitting(false);
+            console.log("Redirecting to dashboard...");
+            navigate('/client-dashboard');
+        }, 1500);
     };
 
     return (
@@ -112,12 +138,18 @@ const Wizard = () => {
                             selectedProduct={selectedProduct}
                             selectedPackage={selectedPackage}
                             onSelectPackage={setSelectedPackage}
+                            projectDescription={projectDescription}
+                            setProjectDescription={setProjectDescription}
                         />
                     )}
                     {currentStep === 3 && (
                         <Step3TheBid
                             budget={budget}
                             setBudget={setBudget}
+                            timeline={timeline}
+                            setTimeline={setTimeline}
+                            selectedProduct={selectedProduct}
+                            selectedPackage={selectedPackage}
                         />
                     )}
                 </div>
@@ -140,10 +172,10 @@ const Wizard = () => {
                             onClick={handleNext}
                             disabled={
                                 (currentStep === 1 && !selectedProduct) ||
-                                (currentStep === 2 && !selectedPackage)
+                                (currentStep === 2 && (!selectedPackage || !projectDescription.trim()))
                             }
                             className={`px-8 py-3 rounded-lg font-bold text-white transition-all transform hover:-translate-y-0.5 ${(currentStep === 1 && !selectedProduct) ||
-                                (currentStep === 2 && !selectedPackage)
+                                (currentStep === 2 && (!selectedPackage || !projectDescription.trim()))
                                 ? 'bg-slate-300 cursor-not-allowed transform-none'
                                 : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200'
                                 }`}
@@ -159,7 +191,7 @@ const Wizard = () => {
                             onClick={handleSubmit}
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'שולח...' : '✨ שלח הצעה'}
+                            {isSubmitting ? 'מפרסם...' : '🚀 פרסם מכרז'}
                         </button>
                     )}
                 </div>
